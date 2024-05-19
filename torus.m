@@ -221,7 +221,7 @@ ori.panel0{107}=[82 92 91];
 ori.panel0{108}=[91 81 82];
 ori.panel0{109}=[80 90 89];
 ori.panel0{110}=[79 80 89];
-ori.panel0{111}=[ 89  90 100];
+ori.panel0{111}=[89  90 100];
 ori.panel0{112}=[100  99  89];
 ori.panel0{113}=[34 35 44];
 ori.panel0{114}=[44 35 45];
@@ -278,8 +278,7 @@ ori.panel0{162}=[43 53 52];
 ori.Mesh_AnalyzeOriginalPattern();
 
 %define crease width
-ori.creaseWidthVec=zeros(ori.oldCreaseNum,1);
-ori.creaseWidthVec(3)=400*10^-6;
+ori.creaseWidthVec=zeros(ori.oldCreaseNum) + 6*10^(-3);
 
 % Compute the meshed geometry
 ori.Mesh_Mesh()
@@ -304,14 +303,13 @@ ori.panelE=2*10^9;
 ori.creaseE=2*10^9; 
 ori.panelPoisson=0.3;
 ori.creasePoisson=0.3; 
-ori.panelThickVec=[500*10^(-6);21*10^-6;500*10^(-6)]; 
+ori.panelThickVec=zeros(162,1) + 1;
 ori.panelW=400*10^-6;
 
 % set up the diagonal rate to be large to suppress crease torsion
 ori.diagonalRate=1000;
 
-ori.creaseThickVec=zeros(ori.oldCreaseNum,1);
-ori.creaseThickVec(3)=(tg+ts);
+ori.creaseThickVec=zeros(ori.oldCreaseNum,1) + 100*10^(-6);
 
 
 %% setup panel contact information
@@ -327,51 +325,46 @@ ori.panelThermalConductVec = [1.3;0.3;1.3];
 ori.creaseThermalConduct=0.3;
 ori.envThermalConduct=0.026;
 
-% thickness of the submerged environment at RT
-ori.t2RT=1500*10^(-6); 
-%% Apply sine wave loading
-% density of SU-8
-rhoSU8=1200;
-ori.densityCrease=rhoSU8;
-ori.densityPanel=rhoSU8;
+%forces
+dc=ControllerDCLoading;
+dc.supp=[2,1,1,1;
+         5,1,1,1;
+         11,1,1,1;
+         16,1,1,1;];     
+loadForce=3;
+dc.load=[29,0,0,loadForce;
+      30,0,0,loadForce;
+      31,0,0,loadForce;
+      32,0,0,loadForce;];  
+dc.increStep=3; 
+dc.tol=10^-6; 
+dc.selectedRefDisp=[29,3]; % use node 29 in z direction as reference
+dc.videoOpen=0;
 
-dynamics=ControllerDynamics();
-dynamics.supp=[1,1,1,1;
-          4,1,1,1;
-          16,1,1,1;
-          9,1,1,1;
-          10,1,1,1;
-          11,1,1,1;
-          12,1,1,1;];   
-      
-dynamics.dt=10^-5;
+% we then use the MGDCM for the unloading
+mgdcm=ControllerMGDCMLoading;
+mgdcm.supp=[2,1,1,1;
+         5,1,1,1;
+         11,1,1,1;
+         16,1,1,1;];     
+loadForce=-1;
+mgdcm.load=[29,0,0,loadForce;
+      30,0,0,loadForce;
+      31,0,0,loadForce;
+      32,0,0,loadForce;];  
+mgdcm.increStep=3; 
+mgdcm.tol=10^-6; 
+mgdcm.videoOpen=0;
 
-step=10000;
-TimeVec=(1:step)*10^-5;
-dynamics.Fext=zeros(step,18,3);
-dynamics.rotTargetAngle=pi*ones(step,11);
-% Apply a step force
-dynamics.Fext(:,6,3)=0.0000001;
-dynamics.Fext(:,7,3)=0.0000001;
-% Apply a step change in stress free folding angle
-dynamics.rotTargetAngle(:,3)=pi+pi/4;
-
-
-% ploting option
-dynamics.plotOpen=0;
-dynamics.videoOpen=1;
-dynamics.videoCropRate=100;
+ori.loadingController{1}={"DC",dc};
+ori.loadingController{2}={"MGDCM",mgdcm};
 
 % Solve the solution
-ori.loadingController{1}={"Dynamics",dynamics};
+ori.loadingController{1}={"DC",dc};
 ori.Solver_Solve()
 
-
-% tip displacement curve
-Uhis=dynamics.Uhis;
-dispHis1=squeeze(Uhis(:,6,3));
-figure
-plot(dispHis1)
+Uhistotal=cat(1,dc.Uhis,mgdcm.Uhis);
+ori.Plot_DeformedHis(ori.newNode,Uhistotal);
 
 
 toc
